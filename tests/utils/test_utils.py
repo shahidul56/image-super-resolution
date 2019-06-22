@@ -21,6 +21,34 @@ class UtilsClassTest(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def test_check_parameter_keys(self):
+        par = {'a': 0}
+        utils.check_parameter_keys(parameter=par, needed_keys=['a'])
+        utils.check_parameter_keys(
+            parameter=par, needed_keys=None, optional_keys=['b'], default_value=-1
+        )
+        self.assertTrue(par['b'] == -1)
+        try:
+            utils.check_parameter_keys(parameter=par, needed_keys=['c'])
+        except:
+            self.assertTrue(True)
+        else:
+            self.assertTrue(False)
+
+        def check_parameter_keys(parameter, needed_keys, optional_keys=None, default_value=None):
+            if needed_keys:
+                for key in needed_keys:
+                    if key not in parameter:
+                        logger.error('{p} is missing key {k}'.format(p=parameter, k=key))
+                        raise
+            if optional_keys:
+                for key in optional_keys:
+                    if key not in parameter:
+                        logger.info(
+                            'Setting {k} in {p} to {d}'.format(k=key, p=parameter, d=default_value)
+                        )
+                        parameter[key] = default_value
+
     def test_config_from_weights_valid(self):
         weights = os.path.join('a', 'path', 'to', 'rdn-C3-D1-G7-G05-x2')
         arch_params = {'C': None, 'D': None, 'G': None, 'G0': None, 'x': None}
@@ -49,7 +77,7 @@ class UtilsClassTest(unittest.TestCase):
         base_conf = {}
         base_conf['default'] = {
             'generator': 'rrdn',
-            'feat_ext': False,
+            'feature_extractor': False,
             'discriminator': False,
             'training_set': 'div2k-x4',
             'test_set': 'dummy',
@@ -71,7 +99,7 @@ class UtilsClassTest(unittest.TestCase):
         base_conf = {}
         base_conf['default'] = {
             'generator': 'rdn',
-            'feat_ext': False,
+            'feature_extractor': False,
             'discriminator': False,
             'training_set': 'div2k-x4',
             'test_set': 'dummy',
@@ -107,10 +135,30 @@ class UtilsClassTest(unittest.TestCase):
         self.assertEqual(utils.select_option(['0', '1'], ''), '1')
         self.assertNotEqual(utils.select_option(['0', '1'], ''), '0')
 
+    @patch('builtins.input', return_value='2 0')
+    def test_select_multiple_options(self, input):
+        self.assertEqual(utils.select_multiple_options(['0', '1', '3'], ''), ['3', '0'])
+        self.assertNotEqual(utils.select_multiple_options(['0', '1', '3'], ''), ['0', '3'])
+
     @patch('builtins.input', return_value='1')
-    def test_select_positive(self, input):
-        self.assertEqual(utils.select_positive(''), 1)
-        self.assertNotEqual(utils.select_positive(''), 0)
+    def test_select_positive_integer(self, input):
+        self.assertEqual(utils.select_positive_integer(''), 1)
+        self.assertNotEqual(utils.select_positive_integer(''), 0)
+
+    @patch('builtins.input', return_value='1.3')
+    def test_select_positive_float(self, input):
+        self.assertEqual(utils.select_positive_float(''), 1.3)
+        self.assertNotEqual(utils.select_positive_float(''), 0)
+
+    @patch('builtins.input', return_value='y')
+    def test_select_bool_true(self, input):
+        self.assertEqual(utils.select_bool(''), True)
+        self.assertNotEqual(utils.select_bool(''), False)
+
+    @patch('builtins.input', return_value='n')
+    def test_select_bool_false(self, input):
+        self.assertEqual(utils.select_bool(''), False)
+        self.assertNotEqual(utils.select_bool(''), True)
 
     @patch('builtins.input', return_value='0')
     def test_browse_weights(self, sel_pos):
@@ -135,3 +183,26 @@ class UtilsClassTest(unittest.TestCase):
 
         self.assertEqual(tr_data, 'test_train_set')
         self.assertEqual(pr_data, 'test_test_set')
+
+    def test_suggest_metrics(self):
+        metrics = utils.suggest_metrics(
+            discriminator=False, feature_extractor=False, loss_weights={}
+        )
+        self.assertTrue('val_loss' in metrics)
+        self.assertFalse('val_generator_loss' in metrics)
+        metrics = utils.suggest_metrics(
+            discriminator=True, feature_extractor=False, loss_weights={}
+        )
+        self.assertTrue('val_generator_loss' in metrics)
+        self.assertFalse('val_feature_extractor_loss' in metrics)
+        self.assertFalse('val_loss' in metrics)
+        metrics = utils.suggest_metrics(discriminator=True, feature_extractor=True, loss_weights={})
+        self.assertTrue('val_feature_extractor_loss' in metrics)
+        self.assertTrue('val_generator_loss' in metrics)
+        self.assertFalse('val_loss' in metrics)
+        metrics = utils.suggest_metrics(
+            discriminator=False, feature_extractor=True, loss_weights={}
+        )
+        self.assertTrue('val_feature_extractor_loss' in metrics)
+        self.assertTrue('val_generator_loss' in metrics)
+        self.assertFalse('val_loss' in metrics)

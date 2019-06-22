@@ -46,8 +46,8 @@ EOF
 
   echo " >>> Copying local source files to remote machine."
   docker-machine scp -r $local_main_dir/ISR $machine_name:$aws_main_dir
-  docker-machine scp -r $local_main_dir/requirements.txt $machine_name:$aws_main_dir
   docker-machine scp -r $local_main_dir/config.yml $machine_name:$aws_main_dir
+  docker-machine scp -r $local_main_dir/setup.py $machine_name:$aws_main_dir
   docker-machine scp $local_main_dir/Dockerfile.gpu $machine_name:$aws_main_dir
   docker-machine scp $local_main_dir/.dockerignore $machine_name:$aws_main_dir
   docker-machine scp $local_main_dir/scripts/entrypoint.sh $machine_name:$aws_main_dir/scripts/
@@ -55,24 +55,24 @@ EOF
 
 if [ $weights = "true" ]; then
   docker-machine ssh $machine_name << EOF
-  mkdir -p $aws_main_dir/weights/sample_weights
+  mkdir -p $aws_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/PSNR-driven/
+  mkdir -p $aws_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/ArtefactCancelling/
+  mkdir -p $aws_main_dir/weights/sample_weights/rdn-C3-D10-G64-G064-x2/PSNR-driven/
 EOF
-  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2_div2k-e086.hdf5 \
-$machine_name:$aws_main_dir/weights/sample_weights/
-  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2_enhanced-e219.hdf5 \
-$machine_name:$aws_main_dir/weights/sample_weights/
-  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C3-D10-G64-G064-x2_div2k-e134.hdf5 \
-$machine_name:$aws_main_dir/weights/sample_weights/
+  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/PSNR-driven/rdn-C6-D20-G64-G064-x2_PSNR_epoch086.hdf5 \
+$machine_name:$aws_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/PSNR-driven/
+  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/ArtefactCancelling/rdn-C6-D20-G64-G064-x2_ArtefactCancelling_epoch219.hdf5 \
+$machine_name:$aws_main_dir/weights/sample_weights/rdn-C6-D20-G64-G064-x2/ArtefactCancelling/
+  docker-machine scp $local_main_dir/weights/sample_weights/rdn-C3-D10-G64-G064-x2/PSNR-driven/rdn-C3-D10-G64-G064-x2_PSNR_epoch134.hdf5 \
+$machine_name:$aws_main_dir/weights/sample_weights/rdn-C3-D10-G64-G064-x2/PSNR-driven/
 fi
 
 
 if ! [ $data = "false" ]; then
   docker-machine ssh $machine_name << EOF
   mkdir -p $aws_main_dir/data/
-  mkdir -p $aws_main_dir/data/
 EOF
   echo " >>> Copying local data folder to remote machine. This will take some time (output is suppressed)"
-  docker-machine scp -r -q $local_main_dir/data/$data $machine_name:$aws_main_dir/data
   docker-machine scp -r -q $local_main_dir/data/$data $machine_name:$aws_main_dir/data
 fi
 
@@ -87,9 +87,6 @@ fi
 if [ $install = "true" ]; then
   echo " >>> Connecting to the remote machine."
   docker-machine ssh $machine_name << EOF
-  echo ">>> Installing unzip and pip"
-  sudo apt -y install unzip
-  sudo apt -y install python3-pip
   echo " >>> Updating pip"
   python3 -m pip install --upgrade pip
   echo " >>> Installing tensorboard"

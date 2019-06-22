@@ -27,10 +27,17 @@ nav:
 theme:
   name: 'material'
   palette:
-    primary: 'blue'
-    accent: 'blue'
+    primary: 'teal'
+    accent: 'teal'
   logo: 'img/logo.svg'
   favicon: 'img/favicon.ico'
+
+repo_name: 'idealo/image-super-resolution'
+repo_url: 'https://github.com/idealo/image-super-resolution'
+
+google_analytics:
+  - 'UA-137434942-1'
+  - 'auto'
 
 markdown_extensions:
   - codehilite

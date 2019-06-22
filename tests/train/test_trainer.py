@@ -1,5 +1,7 @@
 import logging
 import os
+import shutil
+from pathlib import Path
 import unittest
 import yaml
 import numpy as np
@@ -22,48 +24,55 @@ class TrainerClassTest(unittest.TestCase):
             'generator': os.path.join(cls.setup['weights_dir'], 'test_gen_weights.hdf5'),
             'discriminator': os.path.join(cls.setup['weights_dir'], 'test_dis_weights.hdf5'),
         }
+        cls.temp_data = Path('tests/temporary_test_data')
 
-        def fake_folders(kind):
-            if kind['matching'] == False:
-                if kind['res'] == 'hr':
-                    return ['data2.gif', 'data1.png', 'data0.jpeg']
-                elif kind['res'] == 'lr':
-                    return ['data1.png']
-                else:
-                    raise
-            if kind['matching'] == True:
-                if kind['res'] == 'hr':
-                    return ['data2.gif', 'data1.png', 'data0.jpeg']
-                elif kind['res'] == 'lr':
-                    return ['data1.png', 'data0.jpeg']
-                else:
-                    raise
+        cls.not_matching_hr = cls.temp_data / 'not_matching_hr'
+        cls.not_matching_hr.mkdir(parents=True)
+        for item in ['data2.gif', 'data1.png', 'data0.jpeg']:
+            (cls.not_matching_hr / item).touch()
 
-        with patch('os.listdir', side_effect=fake_folders):
-            with patch('ISR.utils.datahandler.DataHandler._check_dataset', return_value=True):
-                cls.trainer = Trainer(
-                    generator=cls.RRDN,
-                    discriminator=cls.discr,
-                    feature_extractor=cls.f_ext,
-                    lr_train_dir={'res': 'lr', 'matching': True},
-                    hr_train_dir={'res': 'hr', 'matching': True},
-                    lr_valid_dir={'res': 'lr', 'matching': True},
-                    hr_valid_dir={'res': 'hr', 'matching': True},
-                    learning_rate=0.0004,
-                    loss_weights={'MSE': 1.0, 'discriminator': 1.0, 'feat_extr': 1.0},
-                    logs_dir='./tests/temporary_test_data/logs',
-                    weights_dir='./tests/temporary_test_data/weights',
-                    dataname='TEST',
-                    weights_generator=None,
-                    weights_discriminator=None,
-                    n_validation=2,
-                    lr_decay_factor=0.5,
-                    lr_decay_frequency=5,
-                    T=0.01,
-                )
+        cls.not_matching_lr = cls.temp_data / 'not_matching_lr'
+        cls.not_matching_lr.mkdir(parents=True)
+        for item in ['data1.png']:
+            (cls.not_matching_lr / item).touch()
+
+        cls.matching_hr = cls.temp_data / 'matching_hr'
+        cls.matching_hr.mkdir(parents=True)
+        for item in ['data2.gif', 'data1.png', 'data0.jpeg']:
+            (cls.matching_hr / item).touch()
+
+        cls.matching_lr = cls.temp_data / 'matching_lr'
+        cls.matching_lr.mkdir(parents=True)
+        for item in ['data1.png', 'data0.jpeg']:
+            (cls.matching_lr / item).touch()
+
+        with patch('ISR.utils.datahandler.DataHandler._check_dataset', return_value=True):
+            cls.trainer = Trainer(
+                generator=cls.RRDN,
+                discriminator=cls.discr,
+                feature_extractor=cls.f_ext,
+                lr_train_dir=str(cls.matching_lr),
+                hr_train_dir=str(cls.matching_hr),
+                lr_valid_dir=str(cls.matching_lr),
+                hr_valid_dir=str(cls.matching_hr),
+                learning_rate={'initial_value': 0.0004, 'decay_factor': 0.5, 'decay_frequency': 5},
+                log_dirs={
+                    'logs': './tests/temporary_test_data/logs',
+                    'weights': './tests/temporary_test_data/weights',
+                },
+                dataname='TEST',
+                weights_generator=None,
+                weights_discriminator=None,
+                n_validation=2,
+                flatness={'min': 0.01, 'max': 0.3, 'increase': 0.01, 'increase_frequency': 5},
+                adam_optimizer={'beta1': 0.9, 'beta2': 0.999, 'epsilon': None},
+                losses={'generator': 'mae', 'discriminator': 'mse', 'feature_extractor': 'mse'},
+                loss_weights={'generator': 1.0, 'discriminator': 1.0, 'feature_extractor': 0.5},
+            )
 
     @classmethod
     def tearDownClass(cls):
+        shutil.rmtree(cls.temp_data)
         pass
 
     def setUp(self):
@@ -77,12 +86,12 @@ class TrainerClassTest(unittest.TestCase):
         combined = mockd_trainer._combine_networks()
         self.assertTrue(len(combined.layers) is 4)
         self.assertTrue(len(combined.loss_weights) is 4)
-        self.assertTrue(np.all(np.array(combined.loss_weights) == [1.0, 1.0, 0.5, 0.5]))
+        self.assertTrue(np.all(np.array(combined.loss_weights) == [1.0, 1.0, 0.25, 0.25]))
         mockd_trainer.discriminator = None
         combined = mockd_trainer._combine_networks()
         self.assertTrue(len(combined.layers) is 3)
         self.assertTrue(len(combined.loss_weights) is 3)
-        self.assertTrue(np.all(np.array(combined.loss_weights) == [1.0, 0.5, 0.5]))
+        self.assertTrue(np.all(np.array(combined.loss_weights) == [1.0, 0.25, 0.25]))
         mockd_trainer.feature_extractor = None
         combined = mockd_trainer._combine_networks()
         self.assertTrue(len(combined.layers) is 2)
@@ -101,10 +110,34 @@ class TrainerClassTest(unittest.TestCase):
         expected_lr = 0.0004 * (0.5) ** 2
         self.assertTrue(lr == expected_lr)
 
+    def test__flatness_scheduler(self):
+        # test with arguments values
+        f = self.trainer._flatness_scheduler(epoch=10)
+        expected_flatness = 0.03
+        self.assertTrue(f == expected_flatness)
+
+        # test with specified values
+        self.trainer.flatness['increase'] = 0.1
+        self.trainer.flatness['increase_frequency'] = 2
+        self.trainer.flatness['min'] = 0.1
+        self.trainer.flatness['max'] = 1.0
+        f = self.trainer._flatness_scheduler(epoch=10)
+        expected_flatness = 0.6
+        self.assertTrue(f == expected_flatness)
+
+        # test max
+        self.trainer.flatness['increase'] = 1.0
+        self.trainer.flatness['increase_frequency'] = 1
+        self.trainer.flatness['min'] = 0.1
+        self.trainer.flatness['max'] = 1.0
+        f = self.trainer._flatness_scheduler(epoch=10)
+        expected_flatness = 1.0
+        self.assertTrue(f == expected_flatness)
+
     def test_that_discriminator_and_f_extr_are_not_trainable_in_combined_model(self):
         combined = self.trainer._combine_networks()
         self.assertTrue(combined.get_layer('discriminator').trainable == False)
-        self.assertTrue(combined.get_layer('feat_extr').trainable == False)
+        self.assertTrue(combined.get_layer('feature_extractor').trainable == False)
 
     def test_that_discriminator_is_trainable_outside_of_combined(self):
         combined = self.trainer._combine_networks()
@@ -170,4 +203,4 @@ class TrainerClassTest(unittest.TestCase):
         mockd_trainer.helper.on_epoch_end = Mock(return_value=True)
 
         logging.disable(logging.CRITICAL)
-        mockd_trainer.train(epochs=1, steps_per_epoch=1, batch_size=1)
+        mockd_trainer.train(epochs=1, steps_per_epoch=1, batch_size=1, monitored_metrics={})

@@ -29,10 +29,10 @@ def run(config_file, default=False, training=False, prediction=False):
         from ISR.train.trainer import Trainer
 
         hr_patch_size = lr_patch_size * scale
-        if conf['default']['feat_ext']:
+        if conf['default']['feature_extractor']:
             from ISR.models.cut_vgg19 import Cut_VGG19
 
-            out_layers = conf['feat_extr']['vgg19']['layers_to_extract']
+            out_layers = conf['feature_extractor']['vgg19']['layers_to_extract']
             f_ext = Cut_VGG19(patch_size=hr_patch_size, layers_to_extract=out_layers)
         else:
             f_ext = None
@@ -52,21 +52,26 @@ def run(config_file, default=False, training=False, prediction=False):
             hr_train_dir=conf['training_sets'][dataset]['hr_train_dir'],
             lr_valid_dir=conf['training_sets'][dataset]['lr_valid_dir'],
             hr_valid_dir=conf['training_sets'][dataset]['hr_valid_dir'],
+            learning_rate=conf['session'][session_type]['learning_rate'],
             loss_weights=conf['loss_weights'],
+            losses=conf['losses'],
             dataname=conf['training_sets'][dataset]['data_name'],
-            logs_dir=conf['dirs']['logs'],
-            weights_dir=conf['dirs']['weights'],
+            log_dirs=conf['log_dirs'],
             weights_generator=conf['weights_paths']['generator'],
             weights_discriminator=conf['weights_paths']['discriminator'],
             n_validation=conf['session'][session_type]['n_validation_samples'],
-            lr_decay_frequency=conf['session'][session_type]['lr_decay_frequency'],
-            lr_decay_factor=conf['session'][session_type]['lr_decay_factor'],
-            T=0.01,
+            flatness=conf['session'][session_type]['flatness'],
+            fallback_save_every_n_epochs=conf['session'][session_type][
+                'fallback_save_every_n_epochs'
+            ],
+            adam_optimizer=conf['session'][session_type]['adam_optimizer'],
+            metrics=conf['session'][session_type]['metrics'],
         )
         trainer.train(
             epochs=conf['session'][session_type]['epochs'],
             steps_per_epoch=conf['session'][session_type]['steps_per_epoch'],
             batch_size=conf['session'][session_type]['batch_size'],
+            monitored_metrics=conf['session'][session_type]['monitored_metrics'],
         )
 
     else:
